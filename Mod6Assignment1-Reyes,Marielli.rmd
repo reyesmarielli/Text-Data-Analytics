@@ -1,0 +1,127 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+###Module 6 - Assignment 1
+####Reyes, Marielli Nicole
+
+
+The packages used for this assignment:
+```{r}
+library(dplyr) 
+library(ggplot2) 
+library(tidytext) 
+library(tidyr)
+```
+
+
+The prince_text dataset was read into the prince_original data frame. 
+```{r}
+prince_original = read.csv("prince_text.csv", stringsAsFactors = FALSE)
+```
+
+
+
+There are a total of 824 observations of 20 variables. 
+```{r}
+names(prince_original)
+glimpse(prince_original)
+```
+
+
+Some of the questions that may be answered using the dataset are: 
+  (1) What words were most commonly used in Prince's songs? 
+  (2) Are the usage of some words related to a song being charted? 
+  (3) What words are frequently part of the charted songs? Uncharted songs?
+
+
+The column "text" was renamed to "lyrics", and only relevant columns were selected for the assignment. 
+```{r}
+prince = prince_original %>%
+  select(lyrics = text, song, year, album, peak, US.Pop, US.R.B)
+```
+
+
+
+The decade and chart_level columns were created. 
+```{r}
+prince <- prince %>%
+ mutate(decade =
+ ifelse(prince$year %in% 1978:1979, "1970s",
+ ifelse(prince$year %in% 1980:1989, "1980s",
+ ifelse(prince$year %in% 1990:1999, "1990s",
+ ifelse(prince$year %in% 2000:2009, "2000s",
+ ifelse(prince$year %in% 2010:2015, "2010s",
+ "NA"))))))
+
+prince <- prince %>%
+ mutate(chart_level =
+ ifelse(prince$peak %in% 1:10, "Top 10",
+ ifelse(prince$peak %in% 11:100, "Top 100", "Uncharted")))
+```
+
+
+After choosing the relevent columns for the assignment, and creating two new columns, decade and chart_level, the prince data frame now consists of 824 observations of 9 variables.
+```{r}
+names(prince)
+```
+
+
+A tidytext dataset of Prince's songs were created and it was tokenized by trigrams. 
+```{r}
+prince_trigrams <- prince %>% 
+  unnest_tokens(trigram, song, token = "ngrams", n = 3)
+```
+  
+The most popular trigrams in Prince's songs were counted.   
+```{r}
+prince_trigrams %>% 
+  count(trigram, sort = TRUE)
+```
+
+Stop words were filtered and the most common words in Prince's songs were counted again.  
+```{r}
+trigrams_separated <- prince_trigrams %>% 
+  separate(trigram, c("word1", "word2", "word3"), sep = " ") 
+
+trigrams_filtered <- trigrams_separated %>% 
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word,
+         !word3 %in% stop_words$word)
+
+trigram_counts <- trigrams_filtered %>% 
+  count(word1, word2, word3, sort = TRUE)
+
+trigram_counts
+
+trigram_united <- trigrams_filtered %>% 
+  unite(trigram, word1, word2, word3, sep = " ")
+```
+
+Tf-idf values for the Prince's songs were calculated based on chart levels. 
+```{r}
+prince_tf_idf <- trigram_united %>% 
+  count(chart_level, trigram) %>% 
+  bind_tf_idf(trigram, chart_level, n) %>% 
+  arrange(desc(tf_idf))
+
+prince_tf_idf
+```
+
+
+```{r}
+prince_tf_idf %>%
+ arrange(desc(tf_idf)) %>%
+ mutate(trigram = factor(trigram, levels = rev(unique(trigram)))) %>% 
+ group_by(chart_level) %>% 
+ top_n(10) %>% 
+ ungroup() %>%
+ ggplot(aes(trigram, tf_idf, fill = chart_level)) +
+ geom_col(show.legend = FALSE) +
+ labs(x = NULL, y = "tf-idf") +
+ facet_wrap(~chart_level, ncol = 3, scales = "free") +
+ coord_flip()
+```
+
+First, the results showed that the most popular trigrams in Prince's songs are "i love you", "in the world", and "if i love". However, after filtering stop-words, it was revealed that the most common words in Prince's songs are "la la la", "affair jamie lewis", and "gotta stop messin". Further, tf_idf values were computed based on chart levels to know the relevance of the words to the songs. The results showed that the trigram "future baby mama" received the highest value for the tf-idf computation. This trigram was followed by "la la la", and "affair jamie lewis". In addition, the visualized result revealed that the trigrams that showed importance to the songs were mostly part of uncharted songs. Only the trigram "future baby mama" was part of the Top 100. 

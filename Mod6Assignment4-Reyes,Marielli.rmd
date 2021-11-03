@@ -1,0 +1,135 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+###Module 6 - Assignment 4
+####Reyes, Marielli Nicole
+
+
+The packages used for this assignment:
+```{r}
+library(dplyr) 
+library(ggplot2) 
+library(tidytext) 
+library(tidyr)
+library(widyr)
+library(igraph)
+library(ggraph)
+```
+
+
+The datasets were read into R. 
+```{r}
+austin_original <- read.csv("reviews-austin.csv", stringsAsFactors = FALSE)
+boston_original <- read.csv("reviews-boston.csv", stringsAsFactors = FALSE)
+```
+
+
+The Austin dataset consists of 294,876 observations of 6 variables. 
+```{r}
+glimpse(austin_original)
+names(austin_original)
+```
+
+
+The Boston dataset consists of 199,330 observations of 6 variables. 
+```{r}
+glimpse(boston_original)
+names(boston_original)
+```
+
+
+Some of the questions that may be answered using this data set are:
+(1) Which of the two locations contain more positive polarity in the comments?
+(2) Which words are more associated with positive comments? 
+(3) Which words would boost a rental property's value to Airbnb renters?
+(4) How similar are the two rental properties based on the comments?
+(5) How different or alike are the two locations?
+
+
+A tidytext dataset was created. 
+```{r}
+tidy_austin <- austin_original %>% 
+  unnest_tokens(word,comments) %>% 
+  filter(!word %in% stop_words$word)
+
+tidy_boston <- boston_original %>% 
+  unnest_tokens(word,comments) %>% 
+  filter(!word %in% stop_words$word)
+```
+
+
+A sample was generated. 
+```{r}
+austin_sample = tidy_austin[1:10000,]
+
+boston_sample = tidy_boston[1:10000,]
+```
+
+
+The times each pair of words occur together in the comments field was counted using the sample data. 
+```{r}
+####Austin
+word_pairs1 <-austin_sample %>% 
+  pairwise_count(word, listing_id, sort=TRUE)
+
+word_pairs1
+
+####Boston
+word_pairs2 <-boston_sample %>% 
+  pairwise_count(word, listing_id, sort=TRUE)
+
+word_pairs2
+```
+
+Correlation among words was calculated.
+```{r}
+
+####Austin
+word_cors1 <- tidy_austin %>% 
+  group_by(word) %>% 
+  filter(n() >= 200) %>% 
+  pairwise_cor(word, reviewer_id, sort = TRUE)
+
+word_cors1
+
+####Boston
+word_cors2 <- tidy_boston %>% 
+  group_by(word) %>% 
+  filter(n() >= 200) %>% 
+  pairwise_cor(word, reviewer_id, sort = TRUE)
+
+word_cors2
+```
+
+Network of correlations among words were plotted.
+```{r}
+set.seed(2017)
+
+####Austin
+word_cors1 %>% 
+  filter(correlation > .75) %>% 
+  graph_from_data_frame() %>% 
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha=correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+
+####Boston
+word_cors2 %>% 
+  filter(correlation > .75) %>% 
+  graph_from_data_frame () %>% 
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha=correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+```
+
+Since the times each pair of words occur together in the comments field was counted using the sample data, it was revealed for the Austin dataset that the word "nice" frequently occurred together with words, "perfect", "stay", "neighborhood", "days", and "arrival." While for Boston, the word "apartment" often occurred together with 	"location", "stay", "clean", and "easy". Also, "stay" occurred frequently with "clean" and "location". 
+
+Further, calculation of correlation among words revealed that for the Austin dataset, "automated and canceled" are highly correlated. The same can be said for "canceled and posting", and "automated and posting." In addition, "walking and distance" also was shown to have high correlation. On the other hand, for Boston, "wi and fi" were highly correlated, as well as "automated and canceled", and "freedom trail." It can be seen from the results that the reviewers put an emphasis on automated and canceled as these words were both highly correlated in both of the datasets. 
+
+The plots generated for the datasets further prove the findings. In the plot, it can be seen that for both Austin and Boston, "canceled", "automated", "reservation" and "posting" are correlated to each other. The same goes for "walking and distance", "memory and foam", "hustle and bustle", "wi and fi", "ear and plugs", and "washer and dryer."

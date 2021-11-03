@@ -1,0 +1,254 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+###Module 4 - Assignment 4
+####Reyes, Marielli Nicole
+
+
+Some questions were created for this assignment: 
+(1) Which of the two locations contain more positive polarity in the comments?
+(2) Which words are more associated with positive comments? 
+(3) Which words would boost a rental property's value to Airbnb renters?
+(4) How similar are the two rental properties based on the comments?
+(5) How different or alike are the two locations?
+
+
+The libraries used for the assignment are: 
+```{r}
+library(tidyverse) 
+library(ggplot2) 
+library(gridExtra)
+library(tidytext) 
+library(stringr)
+library(wordcloud2)
+```
+
+
+The datasets were read into R. 
+```{r}
+austin_original <- read.csv("reviews-austin.csv", stringsAsFactors = FALSE)
+boston_original <- read.csv("reviews-boston.csv", stringsAsFactors = FALSE)
+```
+
+The Austin dataset consists of 294,876 observations of 6 variables. 
+```{r}
+glimpse(austin_original)
+names(austin_original)
+```
+
+
+The Boston dataset consists of 199,330 observations of 6 variables. 
+```{r}
+glimpse(boston_original)
+names(boston_original)
+```
+
+Relevant columns were selected for the datasets. 
+```{r}
+austin <- austin_original %>%
+ select (listing_id, comments)
+
+boston <- boston_original %>% 
+  select (listing_id, comments)
+```
+
+
+Contractions were removed. 
+```{r}
+fix.contractions <- function(doc) {
+ doc <- gsub("won't", "will not", doc)
+ doc <- gsub("can't", "can not", doc)
+ doc <- gsub("n't", " not", doc)
+ doc <- gsub("'ll", " will", doc)
+ doc <- gsub("'re", " are", doc)
+ doc <- gsub("'ve", " have", doc)
+ doc <- gsub("'m", " am", doc)
+ doc <- gsub("'d", " would", doc)
+ doc <- gsub("'s", "", doc)
+ return(doc)
+}
+
+austin$comments <- sapply(austin$comments, fix.contractions)
+```
+
+```{r}
+fix.contractions <- function(doc) {
+ doc <- gsub("won't", "will not", doc)
+ doc <- gsub("can't", "can not", doc)
+ doc <- gsub("n't", " not", doc)
+ doc <- gsub("'ll", " will", doc)
+ doc <- gsub("'re", " are", doc)
+ doc <- gsub("'ve", " have", doc)
+ doc <- gsub("'m", " am", doc)
+ doc <- gsub("'d", " would", doc)
+ doc <- gsub("'s", "", doc)
+ return(doc)
+}
+
+boston$comments <- sapply(boston$comments, fix.contractions)
+```
+
+
+Comments was transformed into tidy data and text was prepared for analysis by removing the stop words, undesirable words, numbers, whitespaces, and special characters.
+```{r}
+tidy_austin = austin %>%
+ unnest_tokens("word", comments)
+
+tidy_boston = boston %>% 
+  unnest_tokens("word", comments)
+```
+
+
+```{r}
+data("stop_words")
+undesirable_words1 <- c("and","the","to","a","was","in","is","we","for","i","of","very","it","this","austin","stay")
+tidy_austin<-tidy_austin%>%
+ filter(!word %in% undesirable_words1)%>%
+ anti_join(stop_words)%>%
+ filter(!nchar(word) < 3,
+ !str_detect(word, "^\\b\\d+\\b"),
+ !str_detect(word, "\\s+"),
+ !str_detect(word, "[^a-zA-Z]")) 
+```
+
+
+```{r}
+undesirable_words2 <- c("the","and","to","a","was","in","is","very","we","i","for","of","it","with","boston","stay")
+tidy_boston<-tidy_boston%>%
+ filter(!word %in% undesirable_words2)%>%
+ anti_join(stop_words)%>%
+ filter(!nchar(word) < 3,
+ !str_detect(word, "^\\b\\d+\\b"),
+ !str_detect(word, "\\s+"),
+ !str_detect(word, "[^a-zA-Z]")) 
+```
+
+The most frequently used words for the austin and boston datasets are "location" and "clean".
+```{r}
+tidy_austin %>%
+ count(word, sort = TRUE) 
+
+tidy_boston %>%
+ count(word, sort = TRUE) 
+```
+
+In order to examine lexicons, new_sentiments dataframe was created. 
+```{r}
+new_sentiments <- sentiments %>% 
+ filter(lexicon != "loughran") %>% 
+ mutate( sentiment = ifelse(lexicon == "afinn" & score >= 0, "positive",
+ ifelse(lexicon == "afinn" & score < 0,
+ "negative", sentiment))) %>%
+ group_by(lexicon) %>%
+ mutate(words_in_lexicon = n_distinct(word)) %>%
+ ungroup()
+```
+
+The lexicon was matched. 
+```{r}
+tidy_austin %>%
+ mutate(words_in_comments = n_distinct(word)) %>%
+ inner_join(new_sentiments) %>%
+ group_by(lexicon, words_in_comments, words_in_lexicon) %>%
+ summarise(lex_match_words = n_distinct(word)) %>%
+ ungroup() %>%
+ mutate(total_match_words = sum(lex_match_words), 
+ match_ratio = lex_match_words / words_in_comments) %>%
+ select(lexicon, lex_match_words, words_in_comments, match_ratio) 
+
+tidy_boston %>%
+ mutate(words_in_comments = n_distinct(word)) %>%
+ inner_join(new_sentiments) %>%
+ group_by(lexicon, words_in_comments, words_in_lexicon) %>%
+ summarise(lex_match_words = n_distinct(word)) %>%
+ ungroup() %>%
+ mutate(total_match_words = sum(lex_match_words), 
+ match_ratio = lex_match_words / words_in_comments) %>%
+ select(lexicon, lex_match_words, words_in_comments, match_ratio) 
+```
+
+
+Sentiment analysis was implemented.
+```{r}
+austin_sentiment <- tidy_austin %>%
+ inner_join(get_sentiments("nrc"))
+
+boston_sentiment <- tidy_boston %>%
+ inner_join(get_sentiments("nrc"))
+```
+
+
+Negative words were examined.
+```{r}
+austin_sentiment %>%
+ count(word,sentiment) %>%
+ filter(sentiment %in% c("negative")) 
+
+boston_sentiment %>%
+ count(word,sentiment) %>%
+ filter(sentiment %in% c("negative")) 
+```
+
+
+Positive words were examined.
+```{r}
+austin_sentiment %>%
+ count(word,sentiment) %>%
+ filter(sentiment %in% c("positive")) 
+
+boston_sentiment %>%
+ count(word,sentiment) %>%
+ filter(sentiment %in% c("positive")) 
+```
+
+
+Words were assessed to see which ones contributed most to sentiment scores. 
+```{r}
+austin_sentiment %>%
+ count(word,sentiment) %>%
+ group_by(sentiment) %>%
+ top_n(10,n) %>%
+ ungroup() %>%
+ mutate(word = reorder(word, n)) %>%
+ ggplot(aes(word,n, fill=sentiment)) +
+ geom_col(show.legend = FALSE) +
+ facet_wrap(~ sentiment, scales = "free") +
+ coord_flip()
+
+boston_sentiment %>%
+ count(word,sentiment) %>%
+ group_by(sentiment) %>%
+ top_n(10,n) %>%
+ ungroup() %>%
+ mutate(word = reorder(word, n)) %>%
+ ggplot(aes(word,n, fill=sentiment)) +
+ geom_col(show.legend = FALSE) +
+ facet_wrap(~ sentiment, scales = "free") +
+ coord_flip()
+```
+
+Sentiment scores for listings in the locations were revealed using the bing lexicon. 
+```{r}
+austin_bing_listing<- tidy_austin %>%
+ inner_join(get_sentiments("bing")) %>%
+ count(listing_id, sentiment) %>%
+ spread(sentiment, n, fill = 0) %>%
+ mutate(sentiment = positive - negative)
+
+austin_bing_listing
+
+
+boston_bing_listing<- tidy_boston %>%
+ inner_join(get_sentiments("bing")) %>%
+ count(listing_id, sentiment) %>%
+ spread(sentiment, n, fill = 0) %>%
+ mutate(sentiment = positive - negative)
+
+boston_bing_listing
+```
+
+To answer the question of how the listings are similar or different: 
+  The two locations have similar frequent words used in their reviews. The two words are clean and location. The two locations differ with the words associated to sentiment scores and there's also a big difference with the sentiment scores displayed for their listings.
+

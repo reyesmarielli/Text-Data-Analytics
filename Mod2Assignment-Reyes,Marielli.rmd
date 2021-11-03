@@ -1,0 +1,123 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+###Module 2 - Assignment 1
+####Reyes, Marielli Nicole V.
+####03/28/2019
+
+
+
+```{r}
+library(tidyverse)
+library(tidytext)
+```
+
+
+
+The song dataset was read into the songs data frame. 
+```{r}
+songs = read.csv("songdata.csv", stringsAsFactors = FALSE)
+```
+
+
+
+The dataset consists of 4 variables namely: artist, song, link, and text. It has 57,650 observations. All of the variables are character types and the column that contains the text data that is going to be analyzed is the "song" column. 
+```{r}
+names(songs)
+glimpse(songs)
+head(songs$song)
+```
+
+
+
+The text data was tokenized and transformed to a tidy data structure. 
+```{r}
+tidy_songs = songs %>% 
+  unnest_tokens("word", song)
+```
+
+
+
+The most popular words in the artists' songs are the following: 
+```{r}
+tidy_songs %>% 
+  count(word) %>% 
+  arrange(desc(n))
+```
+
+
+Stop words were removed from the data frame and a new list of the most popular words can be seen below. 
+```{r}
+cleaned_songs = tidy_songs %>% 
+  anti_join(get_stopwords())
+
+cleaned_songs %>% 
+  count(word) %>% 
+  arrange(desc(n))
+```
+
+
+
+The objective of this assignment is to analyze the songs of the different artists. Some undesirable words may clutter the results so they were removed. 
+```{r}
+undesirable_words = c("song","just","can","ain't","gonna","wanna","oh","hey","o","much","la","n","2","gotta")
+
+cleaned_songs = cleaned_songs %>% 
+  filter(!word %in% undesirable_words)
+```
+
+
+Further, words with fewer than four characters were removed. 
+```{r}
+cleaned_songs = cleaned_songs %>% 
+  filter(nchar(word) > 3)
+```
+
+
+Numbers were deleted as well. 
+```{r}
+cleaned_songs = cleaned_songs[-grep("\\b\\d+\\b", cleaned_songs$word),]
+```
+
+
+In addition, white spaces were also removed so as not to clutter data. 
+```{r}
+cleaned_songs$word = gsub("\\s+","", cleaned_songs$word)
+```
+
+
+Lastly, special characters were deleted. 
+```{r}
+cleaned_songs$word <- gsub("[^a-zA-Z]","", cleaned_songs$word)
+```
+
+
+Ultimately, after applying all the necessary steps to tidy the data, the new word count for songs is as follows:
+```{r}
+cleaned_songs %>% 
+  count(word) %>% 
+  arrange(desc(n))
+```
+
+The chart below shows the result of the analysis. It can be seen that the top word is love, which was used in the songs 3,031 times, followed by time, heart, little, and like. 
+```{r}
+my_colors <- c("#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#D55E00") 
+
+cleaned_songs %>% 
+  count(word, sort = TRUE) %>% 
+  top_n(10) %>% 
+  ungroup() %>% 
+  mutate(word = reorder(word, n)) %>% 
+  ggplot() + 
+  geom_col(aes(word, n), fill = my_colors[4]) + 
+  theme(legend.position = "none", 
+        plot.title = element_text(hjust = 0.5), 
+        panel.grid.major = element_blank()) + 
+  xlab("") + 
+  ylab("Song Count") + 
+  ggtitle("Most Frequently Used Words in Artists' Songs") + 
+  coord_flip()
+```
+

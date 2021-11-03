@@ -1,0 +1,145 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+###Module 6 - Assignment 3
+####Reyes, Marielli Nicole
+
+
+The packages used for this assignment:
+```{r}
+library(dplyr) 
+library(ggplot2) 
+library(tidytext) 
+library(tidyr)
+library(igraph)
+library(ggraph)
+```
+
+
+The datasets were read into R. 
+```{r}
+austin_original <- read.csv("reviews-austin.csv", stringsAsFactors = FALSE)
+boston_original <- read.csv("reviews-boston.csv", stringsAsFactors = FALSE)
+```
+
+
+The Austin dataset consists of 294,876 observations of 6 variables. 
+```{r}
+glimpse(austin_original)
+names(austin_original)
+```
+
+
+The Boston dataset consists of 199,330 observations of 6 variables. 
+```{r}
+glimpse(boston_original)
+names(boston_original)
+```
+
+Some of the questions that may be answered using this data set are:
+(1) Which of the two locations contain more positive polarity in the comments?
+(2) Which words are more associated with positive comments? 
+(3) Which words would boost a rental property's value to Airbnb renters?
+(4) How similar are the two rental properties based on the comments?
+(5) How different or alike are the two locations?
+
+
+Tidyset datasets of guests' reviews were created and tokenized by bigrams for both Austin and Boston. 
+```{r}
+austin_bigrams <- austin_original %>% 
+  unnest_tokens(bigram, comments, token = "ngrams", n = 2)
+
+boston_bigrams <- boston_original %>% 
+  unnest_tokens(bigram, comments, token = "ngrams", n = 2)
+```
+
+
+The most popular bigrams in the reviewers' comments were counted.   
+```{r}
+austin_bigrams %>% 
+  count(bigram, sort = TRUE)
+
+boston_bigrams %>% 
+  count(bigram, sort = TRUE)
+```
+
+
+Stop words were filtered and the most common words in the reviwers' comments were counted again.  
+```{r}
+#####Austin
+bigrams_separated1 <- austin_bigrams %>% 
+  separate(bigram, c("word1", "word2"), sep = " ") 
+
+bigrams_filtered1 <- bigrams_separated1 %>% 
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word)
+
+bigram_counts1 <- bigrams_filtered1 %>% 
+  count(word1, word2, sort = TRUE)
+
+bigram_counts1
+
+bigram_united1 <- bigrams_filtered1 %>% 
+  unite(bigram, word1, word2, sep = " ")
+
+####Boston
+bigrams_separated2 <- boston_bigrams %>% 
+  separate(bigram, c("word1", "word2"), sep = " ") 
+
+bigrams_filtered2 <- bigrams_separated2 %>% 
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word)
+
+bigram_counts2 <- bigrams_filtered2 %>% 
+  count(word1, word2, sort = TRUE)
+
+bigram_counts2
+
+bigram_united2 <- bigrams_filtered2 %>% 
+  unite(bigram, word1, word2, sep = " ")
+```
+
+
+
+A network of common bigrams was created. 
+```{r}
+####Austin
+bigram_graph1 <- bigram_counts1 %>% 
+  filter(n>500) %>% 
+  graph_from_data_frame (directed = FALSE)
+
+bigram_graph1
+
+####Boston
+bigram_graph2 <- bigram_counts2 %>% 
+  filter(n>500) %>% 
+  graph_from_data_frame (directed = FALSE)
+
+bigram_graph2
+```
+
+
+```{r}
+set.seed(2017)
+
+
+####Austin
+ggraph(bigram_graph1, layout = "kk")+
+  geom_edge_link(aes(edge_alpha=n, edge_width=n), show.legend = FALSE,
+    end_cap = circle(.07, "inches"))+
+  geom_node_point(color = "lightblue", size = 5)+
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+  theme_void()
+
+####Boston
+ggraph(bigram_graph2, layout = "kk")+
+  geom_edge_link(aes(edge_alpha=n, edge_width=n), show.legend = FALSE,
+   end_cap = circle(.07, "inches"))+
+  geom_node_point(color = "lightblue", size = 5)+
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+  theme_void()
+```
+
+The most popular bigrams for Austin are "highly recommend", "walking distance", "south congress", "downtown Austin", "recommend staying", "perfect location", "quiet neighborhood", "6th street", "super clean", and "highly recommend." On the other hand, the most common bigrams for Boston are "highly recommend", "walking distance", "minute walk", "public transportation", "perfect location", "downtown boston", "short walk", and " easy access." Some of the words such as highly recommend, walking distance, downtown Austin/Boston, and perfect location were similar to Austin's most common bigrams. This implies that reviewers value the location of the property and whether or not it's easily commutable or walkable to downtown. This is further proven by the network of bigrams created for Austin and Boston. For Austin's graph, the words that are common are "centrally", "perfectly located", "south proximity", "downtown", and "conveniently located." While Boston's results revealed words such as "central", "metro station", "conveniently located", and "public transportation." Lastly, words such as "walking distance" and " highly recommend" received wider links which showed the weight of the ties between the bigrams.  

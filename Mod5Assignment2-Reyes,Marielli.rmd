@@ -1,0 +1,180 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+###Module 5 - Assignment 2
+####Reyes, Marielli Nicole
+
+```{r}
+library(tidyverse) 
+library(ggplot2) 
+library(gridExtra)
+library(tidytext) 
+library(stringr)
+library(topicmodels)
+```
+
+
+The prince dataset was read into R.
+```{r}
+prince_original <- read.csv("prince_text.csv", stringsAsFactors = FALSE)
+```
+
+
+The dataset consists of 824 observations of 20 variables. 
+```{r}
+glimpse(prince_original)
+names(prince_original)
+```
+
+
+Relevant columns were selected and the column "text" was changed to "lyrics."
+```{r}
+prince <-prince_original %>%
+ select (lyrics = text, song, year, album, peak, US.Pop, US.R.B)
+```
+
+
+A new column, decade, was created. 
+```{r}
+prince <- prince %>%
+ mutate(decade =
+ ifelse(prince$year %in% 1978:1979, "1970s",
+ ifelse(prince$year %in% 1980:1989, "1980s",
+ ifelse(prince$year %in% 1990:1999, "1990s",
+ ifelse(prince$year %in% 2000:2009, "2000s",
+ ifelse(prince$year %in% 2010:2015, "2010s",
+ "NA"))))))
+```
+
+
+Column chart_level was also created. 
+```{r}
+prince <- prince %>%
+ mutate(chart_level =
+ ifelse(prince$peak %in% 1:10, "Top 10",
+ ifelse(prince$peak %in% 11:100, "Top 100", "Uncharted")))
+```
+
+
+The dataset now has 824 observations of 9 variables. 
+```{r}
+names(prince)
+glimpse(prince)
+```
+
+
+Contractions were removed.
+```{r}
+fix.contractions <- function(doc) {
+ doc <- gsub("won't", "will not", doc)
+ doc <- gsub("can't", "can not", doc)
+ doc <- gsub("n't", " not", doc)
+ doc <- gsub("'ll", " will", doc)
+ doc <- gsub("'re", " are", doc)
+ doc <- gsub("'ve", " have", doc)
+ doc <- gsub("'m", " am", doc)
+ doc <- gsub("'d", " would", doc)
+ doc <- gsub("'s", "", doc)
+ return(doc)
+}
+
+prince$lyrics <- sapply(prince$lyrics, fix.contractions)
+```
+
+
+
+Lyrics was transformed into tidy data and text was prepared for analysis by removing the stop words, undesirable words, numbers, whitespaces, and special characters.
+```{r}
+tidy_prince = prince %>%
+ unnest_tokens("word", lyrics)
+
+data("stop_words")
+undesirable_words <- c("prince", "chorus", "repeat", "lyrics",
+ "theres", "bridge", "fe0f", "yeah", "baby",
+"alright", "wanna", "gonna", "chorus", "verse",
+"whoa", "gotta", "make", "miscellaneous", "2",
+"4", "ooh", "uurh", "pheromone", "poompoom", "3121",
+"matic", " ai ", " ca ", " la ", "hey", " na ",
+" da ", " uh ", " tin ", " ll", "transcription",
+"repeats")
+tidy_prince<-tidy_prince%>%
+ filter(!word %in% undesirable_words)%>%
+ anti_join(stop_words)%>%
+ filter(!nchar(word) < 3,
+ !str_detect(word, "^\\b\\d+\\b"),
+ !str_detect(word, "\\s+"),
+ !str_detect(word, "[^a-zA-Z]")) 
+```
+
+
+The most frequently used word is "love".
+```{r}
+tidy_prince %>%
+ count(word, sort = TRUE) 
+```
+
+
+A DTM was created for the dataset.
+```{r}
+tidy_prince_DTM<- tidy_prince %>% 
+  count(song, word) %>% 
+  cast_dtm(song, word, n)
+
+tidy_prince_DTM
+```
+
+
+A topic model with 12 topics was ran. 
+```{r}
+song_topic_model<- LDA(tidy_prince_DTM, k=12, control = list(seed=321))
+
+song_topic_model
+```
+
+
+The model was explored using the matrix betta. The results below show the one-topic-per-term-per-row format. For instance, the model estimates that about 0.015% of the words in topic 1 were generated from term "book". 
+```{r}
+song_topics <- tidy(song_topic_model, matrix = "beta")
+
+song_topics
+```
+
+
+The 10 terms that are most common within each topic were identified.
+```{r}
+song_top_terms <- song_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+song_top_terms
+
+song_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
+
+The matrix gamma argument was used to examine the per-document-per-topic probabilities. 
+```{r}
+song_documents <- tidy(song_topic_model, matrix = "gamma")
+
+song_documents
+```
+
+```{r}
+ggplot(song_documents, aes(gamma)) +
+  geom_histogram() +
+  scale_y_log10() +
+  labs(title = "Distribution of probabilities for all topics",
+  y = "Number of documents", x = expression(gamma))
+```
+There are several values near 0, which implies that many documents do not belong in each topic. On the other hand, there are also a significant number of values near 1, which show the documents belonging in those particular topics. Hence, the distribution is rather extreme. The documents are discriminated as belonging to a topic or not. 
+
+Moreover, the results earlier show that some words were identified to be associated with multiple contexts and may not necessarily align with the researcher's interpretation of the data. This highlights one of topic models' limitations. In addition, since researchers have to assume a predetermined number for the topics, some topics may be grouped too broadly or too granular. There is also no contextual recognition in the word occurence for topic modeling so the results might be misleading. 

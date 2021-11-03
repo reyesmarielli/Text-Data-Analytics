@@ -1,0 +1,122 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+###Module 3 - Assignment 1
+####Reyes, Marielli Nicole
+####04/07/2019
+
+The packages used for this assignment are:
+```{r}
+library(tidyverse)
+library(tidytext)
+library(stringr)
+library(wordcloud2)
+library(gridExtra)
+```
+
+
+The IntroDiscussion dataset was read into the discussion data frame. The dataset consists of 6 variables and 33 observations. 
+```{r}
+discussion = read.csv("IntroDiscussion.csv", stringsAsFactors = FALSE)
+```
+
+
+The dataset consists of 33 observations of 6 variables. The variables are ID, position, expectation, familiarity_R, hobby, and X. Given the dataset, it may be possible to know what the students have in common with regards to their background or position, expectations, familiarity with R, and hobbies. 
+```{r}
+names(discussion)
+glimpse(discussion)
+```
+
+
+The column that contains the text data that is going to be analyzed is the "hobby" column
+```{r}
+head(discussion$hobby)
+```
+
+The text data was tokenized and transformed to a tidy data structure.
+```{r}
+tidy_discussion = discussion %>% 
+  unnest_tokens("word", hobby)
+```
+
+The text was prepared for analysis by removing the stop words, undesirable words, numbers, 
+whitespaces, and special characters.
+```{r}
+data("stop_words")
+undesirable_words = c("like","also","really","two","5th")
+
+tidy_discussion = tidy_discussion %>%
+ filter(!word %in% undesirable_words)%>%
+ anti_join(stop_words)%>%
+ filter(!nchar(word) < 3,
+ !str_detect(word, "^\\b\\d+\\b"),
+ !str_detect(word, "\\s+"),
+ !str_detect(word, "[^a-zA-Z]")) 
+```
+
+After applying all the necessary steps to tidy the data, the new word count for hobbies is as follows:
+```{r}
+tidy_discussion %>% 
+  count(word) %>% 
+  arrange(desc(n))
+```
+
+
+The chart below shows the result of the analysis. It can be seen that the top word is school, followed by time, enjoy, love, and spending. 
+```{r}
+my_colors <- c("#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#D55E00") 
+
+tidy_discussion %>% 
+  count(word, sort = TRUE) %>% 
+  top_n(10) %>% 
+  ungroup() %>% 
+  mutate(word = reorder(word, n)) %>% 
+  ggplot() + 
+  geom_col(aes(word, n), fill = my_colors[4]) + 
+  theme(legend.position = "none", 
+        plot.title = element_text(hjust = 0.5), 
+        panel.grid.major = element_blank()) + 
+  xlab("") + 
+  ylab("Count") + 
+  ggtitle("Most Frequently Used Words in Students' Hobbies") + 
+  coord_flip()
+```
+
+A wordcloud was also created to show the most common words in the text. 
+```{r}
+tidy_discussion %>%
+  count(word, sort = TRUE)%>%
+  wordcloud2(tidy_discussion[1:100, ], size = .5)
+```
+
+```{r}
+tidy_discussion_tfidf<- discussion %>%
+ unnest_tokens("word", hobby) %>%
+ anti_join(stop_words) %>%
+ count(word, ID) %>%
+ bind_tf_idf(word, ID, n)
+```
+
+Using tf-idf, the results show that the unique words are golf, hockey, fish, hangout, and workout. 
+```{r}
+top_tfidf<- tidy_discussion_tfidf %>%
+ arrange(desc(tf_idf)) %>%
+ select(word, tf_idf)
+top_tfidf
+```
+
+A document term matrix was also created. 
+```{r}
+tidy_discussion_DTM<- discussion %>%
+ unnest_tokens(word, hobby) %>%
+ count(ID, word) %>%
+ cast_dtm(ID, word, n)
+
+tidy_discussion_DTM
+```
+
+Frequency techniques are important since they let the users know vital information in the data and may also help show what the data is all about. By using frequency techniques, one is able to quantify the importance of some words in the text. In addition, visualizing the results of the analysis help describe the data set because it is able to show the shape of the data to the users. With charts and other tools, readers would be able to quickly see the story of your data and its patterns and trends. Further, one of the frequency techniques that may be used to examine the importance of words in the text is tf-idf. In this technique, less weight is put on most commonly used words and more focus is directed to less used words that may be vital in the analysis. Through this, some unique words may be revealed and it would be ensured that they would not be ignored for the study. In addition, since less focus is applied for the most frequent used terms, the results may be different and will thus give a different perspective on the analysis. For this assignment, the top common words were school, time, and enjoy; however, by utilizing tf-idf, the results showed interesting words such as golf, hockey, and fish that are more relevant to the analysis of the students' hobbies. 
+
+For this assignment, I have learned how to use wordcloud and I also learned the importance of using tf-idf in showing other perspectives in the data. In future exercises, I hope to learn how words may be correlated to each other. 

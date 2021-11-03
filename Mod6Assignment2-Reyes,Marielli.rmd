@@ -1,0 +1,170 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+###Module 6 - Assignment 2
+####Reyes, Marielli Nicole
+
+
+The packages used for this assignment:
+```{r}
+library(dplyr) 
+library(ggplot2) 
+library(tidytext) 
+library(tidyr)
+```
+
+The datasets were read into R. 
+```{r}
+austin_original <- read.csv("reviews-austin.csv", stringsAsFactors = FALSE)
+boston_original <- read.csv("reviews-boston.csv", stringsAsFactors = FALSE)
+```
+
+The Austin dataset consists of 294,876 observations of 6 variables. 
+```{r}
+glimpse(austin_original)
+names(austin_original)
+```
+
+
+The Boston dataset consists of 199,330 observations of 6 variables. 
+```{r}
+glimpse(boston_original)
+names(boston_original)
+```
+
+Some of the questions that may be answered using this data set are:
+(1) Which of the two locations contain more positive polarity in the comments?
+(2) Which words are more associated with positive comments? 
+(3) Which words would boost a rental property's value to Airbnb renters?
+(4) How similar are the two rental properties based on the comments?
+(5) How different or alike are the two locations?
+
+
+Tidytext datasets of guests' reviews were created and tokenized by bigrams for both Austin and Boston. 
+```{r}
+austin_bigrams <- austin_original %>% 
+  unnest_tokens(bigram, comments, token = "ngrams", n = 2)
+
+boston_bigrams <- boston_original %>% 
+  unnest_tokens(bigram, comments, token = "ngrams", n = 2)
+```
+
+
+The most popular bigrams in the reviewers' comments were counted.   
+```{r}
+austin_bigrams %>% 
+  count(bigram, sort = TRUE)
+
+boston_bigrams %>% 
+  count(bigram, sort = TRUE)
+```
+
+
+Stop words were filtered and the most common words were counted again.  
+```{r}
+#####Austin
+bigrams_separated1 <- austin_bigrams %>% 
+  separate(bigram, c("word1", "word2"), sep = " ") 
+
+bigrams_filtered1 <- bigrams_separated1 %>% 
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word)
+
+bigram_counts1 <- bigrams_filtered1 %>% 
+  count(word1, word2, sort = TRUE)
+
+bigram_counts1
+
+bigram_united1 <- bigrams_filtered1 %>% 
+  unite(bigram, word1, word2, sep = " ")
+
+####Boston
+bigrams_separated2 <- boston_bigrams %>% 
+  separate(bigram, c("word1", "word2"), sep = " ") 
+
+bigrams_filtered2 <- bigrams_separated2 %>% 
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word)
+
+bigram_counts2 <- bigrams_filtered2 %>% 
+  count(word1, word2, sort = TRUE)
+
+bigram_counts2
+
+bigram_united2 <- bigrams_filtered2 %>% 
+  unite(bigram, word1, word2, sep = " ")
+```
+
+
+Tf-idf values for the reviewer's comments were calculated based on chart levels. 
+```{r}
+austin_tf_idf <- bigram_united1 %>% 
+  count(listing_id, bigram) %>% 
+  bind_tf_idf(bigram, listing_id, n) %>% 
+  arrange(desc(tf_idf))
+
+austin_tf_idf
+
+boston_tf_idf <- bigram_united2 %>% 
+  count(listing_id, bigram) %>% 
+  bind_tf_idf(bigram, listing_id, n) %>% 
+  arrange(desc(tf_idf))
+
+boston_tf_idf
+```
+
+
+```{r}
+negation_words <- c("not", "no", "never", "without")
+
+####Austin
+negated_words1 <- bigrams_separated1 %>% 
+  filter(word1 %in% negation_words) %>% 
+  inner_join(get_sentiments("afinn"), by = c(word2 = "word")) %>% 
+  count(word1, word2, score, sort = TRUE)
+
+negated_words1
+
+####Boston
+negated_words2 <- bigrams_separated2 %>% 
+  filter(word1 %in% negation_words) %>% 
+  inner_join(get_sentiments("afinn"), by = c(word2 = "word")) %>% 
+  count(word1, word2, score, sort = TRUE)
+
+negated_words2
+```
+
+```{r}
+
+####Austin
+negated_words1 %>% 
+  mutate(contribution = n * score) %>% 
+  arrange(desc(abs(contribution))) %>% 
+  head(20) %>% 
+  mutate(word2 = reorder (word2, contribution)) %>% 
+  ggplot(aes(word2, n * score, fill = n * score >0)) +
+  geom_col(show.legend = FALSE) +
+  xlab("Words preceded by \"not, no, never, without\"") +
+  ylab("Sentiment score * number of occurences") +
+  coord_flip()
+
+
+####Boston
+negated_words2 %>% 
+  mutate(contribution = n * score) %>% 
+  arrange(desc(abs(contribution))) %>% 
+  head(20) %>% 
+  mutate(word2 = reorder (word2, contribution)) %>% 
+  ggplot(aes(word2, n * score, fill = n * score >0)) +
+  geom_col(show.legend = FALSE) +
+  xlab("Words preceded by \"not, no, never, without\"") +
+  ylab("Sentiment score * number of occurences") +
+  coord_flip()
+```
+
+
+On one hand, Austin's results showed that initially the most popular bigrams in the comments are "a great", "in the", and "it was". These words didn't give much insight so stop-words were also filtered to know more about the data. The results revealed that the most common bigrams are "highly recommend",  "walking distance", "south congress", "downtown Austin", "recommend staying", "perfect location", "quiet neighborhood", "6th street", "super clean", and "highly recommended. In addition, it was identified how often words were preceded by negation words such as "no", "not", "never", and "without". These words were "problem/s", "hesitate", "recommend", "trouble", "bad", "clean", "want", "great", and "bother". Lastly, words which contributed the most in the wrong direction were identified, and they are: "doubt", "worrying", and "bother". 
+
+On the other hand, Boston's results showed that the most popular bigrams are "highly recommend", "walking distance", "minute walk", "public transportation", "perfect location", "downtown boston", "short walk", and " easy access". Some of the words such as highly recommend, walking distance, downtown Austin/Boston, and perfect location were similar to Austin's most common bigrams. This implies that reviewers value the location of the property and whether or not it's easily commutable or walkable to downtown. Moreover, common words for Boston that were preceded by negation words were similar to Austin's as well, while the words which contributed the most in the wrong direction were identified to be "doubt", "regret", and "disappointed." 

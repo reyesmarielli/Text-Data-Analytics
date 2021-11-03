@@ -1,0 +1,818 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+###Module 7 - Project
+####Reyes, Marielli Nicole
+
+
+The packages used for the project:
+```{r}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra) 
+library(tidytext) 
+library(wordcloud2)
+library(stringr)
+library(topicmodels)
+library(igraph)
+library(ggraph)
+library(tidyr)
+library(widyr)
+```
+
+
+##Part 1 - Survey Data
+
+The data that was used for this part of the project was provided by Marie Canel, which she gathered through a survey study.
+```{r}
+titleix_original <- read.csv ("titleixparti.csv", stringsAsFactors = FALSE)
+```
+
+
+The data comprises of 104 observations of 34 character variables. 
+```{r}
+names(titleix_original)
+```
+
+
+Relevant columns were selected and the column names were changed for better analysis of the data. For this study, the researcher wanted to focus on what the students feel about the Title IX mandate so Question 7 of the survey data (column name "reaction") will be the focus of the analysis.
+```{r}
+titleix = titleix_original %>% 
+  select(ID, age="Q1...age", race="Q2...race.ethnicity", freshman="Q3...freshman", 
+  campus="Q4...live.on.campas", international="Q5...international.student",  
+  experienced="Q6...experienced.nonconsensual.sexual.contact.by.another.student", 
+  reaction="Q7...How.does.the.information.about.the.Title.IX.Mandate.make.you.feel.")
+```
+
+
+
+Contractions were removed. 
+```{r}
+fix.contractions <- function(doc) {
+ doc <- gsub("won't", "will not", doc)
+ doc <- gsub("can't", "can not", doc)
+ doc <- gsub("n't", " not", doc)
+ doc <- gsub("'ll", " will", doc)
+ doc <- gsub("'re", " are", doc)
+ doc <- gsub("'ve", " have", doc)
+ doc <- gsub("'m", " am", doc)
+ doc <- gsub("'d", " would", doc)
+ doc <- gsub("'s", "", doc)
+ return(doc)
+}
+
+titleix$reaction <- sapply(titleix$reaction, fix.contractions)
+```
+
+
+The questions that the researcher aim to answer in the analysis are: 
+1. What do the students feel about the Title IX Mandate?
+2. Would the students be more comfortable talking about their experience now that there is    a mandate? 
+3. What are the common tokens for this particular survey question?
+4. What are the key themes in the answers?
+
+
+
+A tidytext dataset was created for the study. 
+```{r}
+tidy_titleix <- titleix %>% 
+  unnest_tokens(word,reaction) 
+```
+
+
+
+The text was prepared for analysis by removing the stop words, undesirable words, numbers, 
+whitespaces, and special characters.
+```{r}
+data("stop_words")
+undesirable_words = c("from","that","being","and","there","this","have","also","are","ever","title","nonconsensual","feel","makes","people","students","campus","situation","knowing","mandate","happen","sex","assault","issue","sexual","assaulted","mandated","situations","student","video","happened","rape","skipped","madated","bit","https","titleix","tonymess")
+
+tidy_titleix = tidy_titleix %>%
+ filter(!word %in% undesirable_words)%>%
+ anti_join(stop_words)%>%
+ filter(!nchar(word) < 3,
+ !str_detect(word, "^\\b\\d+\\b"),
+ !str_detect(word, "\\s+"),
+ !str_detect(word, "[^a-zA-Z]")) 
+```
+
+
+After applying all the necessary steps to tidy the data, the new word count for the students' answers is as follows:
+```{r}
+tidy_titleix %>% 
+  count(word) %>% 
+  arrange(desc(n))
+```
+
+
+
+The chart below shows the result of the analysis. It can be seen that the top word is safe, followed by resources, information, reported, and protect. 
+```{r}
+my_colors <- c("#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#D55E00") 
+
+tidy_titleix %>% 
+  count(word, sort = TRUE) %>% 
+  top_n(10) %>% 
+  ungroup() %>% 
+  mutate(word = reorder(word, n)) %>% 
+  ggplot() + 
+  geom_col(aes(word, n), fill = my_colors[4]) + 
+  theme(legend.position = "none", 
+        plot.title = element_text(hjust = 0.5), 
+        panel.grid.major = element_blank()) + 
+  xlab("") + 
+  ylab("Count") + 
+  ggtitle("Most Frequently Used Words in Students' Reaction About Title IX") + 
+  coord_flip()
+```
+
+
+A wordcloud was also created to show the most common words in the text. 
+```{r}
+tidy_titleix %>%
+  count(word, sort = TRUE)%>%
+  wordcloud2(tidy_titleix[1:100, ], size = .5)
+```
+
+
+Td-idf was used on the data so that more weight will be put on words less frequently used but may be important to the analysis.
+```{r}
+tidy_titleix_tfidf<- titleix %>%
+ unnest_tokens("word", reaction) %>%
+ anti_join(stop_words) %>%
+ count(word, ID) %>%
+ bind_tf_idf(word, ID, n)
+```
+
+
+Using tf-idf, the results show that the unique words are talked, disturbed, reasonable, and reassured. 
+```{r}
+top_tfidf<- tidy_titleix_tfidf %>%
+ arrange(desc(tf_idf)) %>%
+ select(word, tf_idf)
+
+top_tfidf
+```
+
+
+Frequency techniques are important since they let the users know vital information in the data and may also help show what the data is all about. By using frequency techniques, one is able to quantify the importance of some words in the text. In addition, visualizing the results of the analysis help describe the data set because it is able to show the shape of the data to the users. With charts and other tools, readers would be able to quickly see the story of the data and its patterns and trends. Further, one of the frequency techniques that may be used to examine the importance of words in the text is tf-idf. In this technique, less weight is put on most commonly used words and more focus is directed to less used words that may be vital in the analysis. Through this, some unique words may be revealed and it would be ensured that they would not be ignored for the study. In addition, since less focus is applied for the most frequent used terms, the results may be different and will thus give a different perspective on the analysis. 
+
+For this part of the project, the initial analysis of the top common words revealed that students feel safer and protected by learning about the Title IX. They are now aware that there are resources, options, and information available so they can talk about their experiences or report them comfortably given that it will remain confidential. Overall, they are glad about the TitleIX Mandate especially knowing that somebody cares about them. By utilizing tf-idf, the results reiterated the students' feelings with regards to the TitleIX. They are reassured and comfortable. However, the tf-idf application also generated interesting perspectives. It revealed some of the students' mixed feelings about TitleIX. Some students are disturbed by it or unsure. 
+
+
+Further, a document term matrix was created. 
+```{r}
+tidy_titleix_DTM <- titleix %>%
+ unnest_tokens(word, reaction) %>%
+ count(ID, word) %>%
+ cast_dtm(ID, word, n)
+
+tidy_titleix_DTM
+```
+
+
+A topic model with 8 topics was ran. 
+```{r}
+titleix_topic_model<- LDA(tidy_titleix_DTM, k=8, control = list(seed=123))
+
+titleix_topic_model
+```
+
+
+The model was explored using the matrix betta. The results below show the one-topic-per-term-per-row format. For instance, the model estimates that about 0.08% of the words in topic 1 were generated from term "college". 
+```{r}
+reaction_topics <- tidy(titleix_topic_model, matrix = "beta")
+
+reaction_topics
+```
+
+
+The 10 terms that are most common within each topic were identified.
+```{r}
+reaction_top_terms <- reaction_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+reaction_top_terms
+
+reaction_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
+
+The matrix gamma argument was used to examine the per-document-per-topic probabilities. 
+```{r}
+reaction_documents <- tidy(titleix_topic_model, matrix = "gamma")
+
+reaction_documents
+```
+
+```{r}
+ggplot(reaction_documents, aes(gamma)) +
+  geom_histogram() +
+  scale_y_log10() +
+  labs(title = "Distribution of probabilities for all topics",
+  y = "Number of documents", x = expression(gamma))
+```
+
+There are several values near 0, which implies that many documents do not belong in each topic. Moreover, the results earlier show that some words were identified to be associated with multiple contexts and may not necessarily align with the researcher's interpretation of the data. This highlights one of topic models' limitations. In addition, since researchers have to assume a predetermined number for the topics, some topics may be grouped too broadly or too granular. There is also no contextual recognition in the word occurence for topic modeling so the results might be misleading.
+
+
+In order to examine lexicons, new_sentiments dataframe was created. 
+```{r}
+new_sentiments <- sentiments %>% 
+ filter(lexicon != "loughran") %>% 
+ mutate( sentiment = ifelse(lexicon == "afinn" & score >= 0, "positive",
+ ifelse(lexicon == "afinn" & score < 0,
+ "negative", sentiment))) %>%
+ group_by(lexicon) %>%
+ mutate(words_in_lexicon = n_distinct(word)) %>%
+ ungroup()
+```
+
+
+The lexicon was matched. 
+```{r}
+tidy_titleix %>%
+ mutate(words_in_reaction = n_distinct(word)) %>%
+ inner_join(new_sentiments) %>%
+ group_by(lexicon, words_in_reaction, words_in_lexicon) %>%
+ summarise(lex_match_words = n_distinct(word)) %>%
+ ungroup() %>%
+ mutate(total_match_words = sum(lex_match_words), #Not used but good to ha  ve
+ match_ratio = lex_match_words / words_in_reaction) %>%
+ select(lexicon, lex_match_words, words_in_reaction, match_ratio) 
+```
+
+
+Sentiment analysis was implemented.
+```{r}
+tidy_sentiment <- tidy_titleix %>%
+ inner_join(get_sentiments("nrc"))
+```
+
+
+A new column, reaction_total, was created and sentiment analysis was implemented.
+```{r}
+tidy_sentiment_reaction <- tidy_titleix %>%
+ group_by(word) %>%
+ mutate(reaction_total=n()) %>%
+ ungroup() %>%
+ inner_join(get_sentiments("nrc"))
+```
+
+Negative words were examined. The top words associated with negative sentiments are shown below. 
+```{r}
+tidy_sentiment_reaction %>%
+ count(word, sentiment, reaction_total) %>%
+ mutate(percent=n/reaction_total) %>%
+ filter(sentiment %in% c("negative")) %>%
+ arrange(desc(percent))
+```
+
+
+Positive words were examined. The top words associated with positive sentiments are shown below.
+```{r}
+tidy_sentiment_reaction %>%
+ count(word, sentiment, reaction_total) %>%
+ mutate(percent=n/reaction_total) %>%
+ filter(sentiment %in% c("positive")) %>%
+ arrange(desc(percent))
+```
+
+Words were assessed to see which ones contributed most to sentiment scores. Safe was the top word associated with joy, while disturbed is the top word related to anger/sadness.
+```{r}
+tidy_sentiment_reaction %>%
+ count(word,sentiment) %>%
+ group_by(sentiment) %>%
+ top_n(10,n) %>%
+ ungroup() %>%
+ mutate(word = reorder(word, n)) %>%
+ ggplot(aes(word,n, fill=sentiment)) +
+ geom_col(show.legend = FALSE) +
+ facet_wrap(~ sentiment, scales = "free") +
+ coord_flip()
+```
+
+
+Filter were implemented on negative words.
+```{r}
+tidy_sentiment_reaction %>%
+filter((sentiment %in% c("negative"))) %>%
+count(word, sentiment) %>%
+group_by(sentiment) %>%
+top_n(10,n) %>%
+ungroup() 
+```
+
+
+Further, the data was also analyzed using bigrams. 
+```{r}
+titleix_bigrams <- titleix %>% 
+  unnest_tokens(bigram, reaction, token = "ngrams", n = 2)
+```
+
+
+The most popular bigrams in the students' answers were counted.   
+```{r}
+titleix_bigrams %>% 
+  count(bigram, sort = TRUE)
+```
+
+
+Stop words were filtered and the most common words were counted again. The top bigrams of the students reveal that they feel safer and comfortable talking with the Title IX Mandate.
+```{r}
+bigrams_separated1 <- titleix_bigrams %>% 
+  separate(bigram, c("word1", "word2"), sep = " ") 
+
+bigrams_filtered1 <- bigrams_separated1 %>% 
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word)
+
+bigram_counts1 <- bigrams_filtered1 %>% 
+  count(word1, word2, sort = TRUE)
+
+bigram_counts1
+
+bigram_united1 <- bigrams_filtered1 %>% 
+  unite(bigram, word1, word2, sep = " ")
+```
+
+
+Bigram tf-idf values for the students' answers were calculated. The results reiterate what was revealed with the common bigrams earlier - that students feel comfortable or confident talking and feel protected with the Title IX mandate. 
+```{r}
+bigram_tf_idf <- bigram_united1 %>% 
+  count(ID, bigram) %>% 
+  bind_tf_idf(bigram, ID, n) %>% 
+  arrange(desc(tf_idf))
+
+bigram_tf_idf
+```
+
+
+Common words that negate the subsequent words were picked and the number of times words were preceded by them were counted. 
+```{r}
+negation_words <- c("not", "no", "never", "without")
+
+negated_words1 <- bigrams_separated1 %>% 
+  filter(word1 %in% negation_words) %>% 
+  inner_join(get_sentiments("afinn"), by = c(word2 = "word")) %>% 
+  count(word1, word2, score, sort = TRUE)
+
+negated_words1
+```
+
+Words that contributed most in the "wrong" direction were identified. These words are want, desire, and allow.  
+```{r}
+negated_words1 %>% 
+  mutate(contribution = n * score) %>% 
+  arrange(desc(abs(contribution))) %>% 
+  head(20) %>% 
+  mutate(word2 = reorder (word2, contribution)) %>% 
+  ggplot(aes(word2, n * score, fill = n * score >0)) +
+  geom_col(show.legend = FALSE) +
+  xlab("Words preceded by \"not, no, never, without\"") +
+  ylab("Sentiment score * number of occurences") +
+  coord_flip()
+```
+
+A network of common bigrams was created. The words "feel" and "safe" received wider links which showed the weight of the ties between the bigrams. Other words that are worth to be noted are "positive" and "resources", and "mixed" and "feelings."
+```{r}
+bigram_graph1 <- bigram_counts1 %>% 
+  graph_from_data_frame (directed = FALSE)
+
+bigram_graph1
+
+set.seed(123)
+
+ggraph(bigram_graph1, layout = "kk")+
+  geom_edge_link(aes(edge_alpha=n, edge_width=n), show.legend = FALSE,
+    end_cap = circle(.07, "inches"))+
+  geom_node_point(color = "lightblue", size = 5)+
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+  theme_void()
+```
+
+  
+The times each pair of words occur together in the students' answers was counted. The top words are safe and resources, and report and info. 
+```{r}
+word_pairs1 <- tidy_titleix %>% 
+  pairwise_count(word, ID, sort=TRUE)
+
+word_pairs1
+```
+
+Correlation among words was calculated. Aware and info have a high correlation value of 0.8, followed by designed and mandatory with a correlation value of 0.7. 
+```{r}
+word_cors1 <- tidy_titleix %>% 
+  group_by(word) %>% 
+  filter(n() >= 2) %>% 
+  pairwise_cor(word, ID, sort = TRUE)
+
+word_cors1
+```
+
+Network of correlations among words were plotted. The visual shows the words that have at least 70% correlation. These group of words are designed and mandatory, sensitive and person, question and respondent, and info and aware. 
+```{r}
+set.seed(123)
+
+word_cors1 %>% 
+  filter(correlation > .70) %>% 
+  graph_from_data_frame() %>% 
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha=correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+```
+
+Overall, the analysis with the survey data was fruitful. The researcher was able to answer the questions stated earlier in the report. It was revealed from the analysis that most of the students feel safer and protected after learning about the Title IX Mandate. However, some students are still unsure or have mixed feelings about it. With regards to the second question about students being more comfortable talking, this was proven true with the analysis of the bigrams. The top bigrams showed that students now feel more comfortable or confident talking since they feel that someone cares and they now know about the resources available to them. In addition, the common tokens or bigrams that answered the survey question were "feel comfortable", "feel confident", "people care","knowing action", "positive resources", and "feel protected". Thus, the common themes for the answers were identified as safety, protection, confidentiality, and knowledge. 
+
+The researcher learned from this project the importance of analyzing tokens in order to discover themes in a study. In future projects, the reseacher recommends that more data be gathered so that other insights may be identified. The original data only comprised of 104 observations but having at least 500 observations might reveal other vital information. In addition, other members of the academia may also be involved in the survey and not just limited to freshmen. This would guarantee that other perspectives will not be ignored. 
+
+
+
+
+
+
+
+
+
+
+
+
+##Part 2 - Twitter Data
+
+This part of the project will use data gathered from Twitter.
+```{r}
+twitter_original <- read.csv ("titleixpartii.csv", stringsAsFactors = FALSE)
+```
+
+The data comprises of 666 observations of 17 variables. 
+```{r}
+names(twitter_original)
+```
+
+Relevant columns were selected. For this part of study, the researcher wanted to focus on what the public feel about the Title IX mandate.
+```{r}
+twitter = twitter_original %>% 
+  select(X, text, favorited, screenName)
+```
+
+Contractions were removed. 
+```{r}
+twitter$text <- sapply(twitter$text, fix.contractions)
+```
+
+
+The questions that the researcher aim to answer in the analysis are: 
+1. What is the sentiments of the tweets?
+2. Do the public generally agree with the Title IX mandate?
+3. Are there significant correlation between the words used? 
+4. What are the public's concerns regarding the Title IX mandate?
+
+
+A tidytext dataset was created for the study. 
+```{r}
+tidy_twitter <- twitter %>% 
+  unnest_tokens(word,text) 
+```
+
+
+The text was prepared for analysis by removing the stop words, undesirable words, numbers, 
+whitespaces, and special characters.
+```{r}
+tidy_twitter = tidy_twitter %>%
+ filter(!word %in% undesirable_words)%>%
+ anti_join(stop_words)%>%
+ filter(!nchar(word) < 3,
+ !str_detect(word, "^\\b\\d+\\b"),
+ !str_detect(word, "\\s+"),
+ !str_detect(word, "[^a-zA-Z]")) 
+```
+
+
+After applying all the necessary steps to tidy the data, the word count is as follows:
+```{r}
+tidy_twitter %>% 
+  count(word) %>% 
+  arrange(desc(n))
+```
+
+The chart below shows the result of the analysis. It can be seen that the top word is Missouri, followed by son, process, and bills.
+```{r}
+tidy_twitter %>% 
+  count(word, sort = TRUE) %>% 
+  top_n(10) %>% 
+  ungroup() %>% 
+  mutate(word = reorder(word, n)) %>% 
+  ggplot() + 
+  geom_col(aes(word, n), fill = my_colors[4]) + 
+  theme(legend.position = "none", 
+        plot.title = element_text(hjust = 0.5), 
+        panel.grid.major = element_blank()) + 
+  xlab("") + 
+  ylab("Count") + 
+  ggtitle("Most Frequently Used Words in Twitter's Reaction") + 
+  coord_flip()
+```
+
+A wordcloud was also created to show the most common words in the text. 
+```{r}
+tidy_twitter %>%
+  count(word, sort = TRUE)%>%
+  wordcloud2(tidy_twitter[1:100, ], size = .5)
+```
+
+
+Td-idf was used on the data so that more weight will be put on words less frequently used but may be important to the analysis.
+```{r}
+tidy_twitter_tfidf<- twitter %>%
+ unnest_tokens("word", text) %>%
+ anti_join(stop_words) %>%
+ count(word, X) %>%
+ bind_tf_idf(word, X, n)
+```
+
+
+Using tf-idf, the top words are shown below. It can be seen that some of the words are not related or not as important to Title IX mandate. 
+```{r}
+top_twitter_tfidf<- tidy_twitter_tfidf %>%
+ arrange(desc(tf_idf)) %>%
+ select(word, tf_idf)
+
+top_twitter_tfidf
+```
+
+A document term matrix was also created. 
+```{r}
+tidy_twitter_DTM <- twitter %>%
+ unnest_tokens(word, text) %>%
+ count(X, word) %>%
+ cast_dtm(X, word, n)
+
+tidy_twitter_DTM
+```
+
+
+A topic model with 12 topics was ran. 
+```{r}
+twitter_topic_model<- LDA(tidy_twitter_DTM, k=12, control = list(seed=123))
+
+twitter_topic_model
+```
+
+
+The model was explored using the matrix betta. The results below show the one-topic-per-term-per-row format. 
+```{r}
+twitter_topics <- tidy(twitter_topic_model, matrix = "beta")
+
+twitter_topics
+```
+
+The 10 terms that are most common within each topic were identified.
+```{r}
+twitter_top_terms <- twitter_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+twitter_top_terms
+
+twitter_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+```
+
+The matrix gamma argument was used to examine the per-document-per-topic probabilities. 
+```{r}
+twitter_documents <- tidy(twitter_topic_model, matrix = "gamma")
+
+twitter_documents
+```
+
+There are several values near 0, which implies that many documents do not belong in each topic.
+```{r}
+ggplot(twitter_documents, aes(gamma)) +
+  geom_histogram() +
+  scale_y_log10() +
+  labs(title = "Distribution of probabilities for all topics",
+  y = "Number of documents", x = expression(gamma))
+```
+
+
+Further, lexicons were examined and matched.
+```{r}
+tidy_twitter %>%
+ mutate(words_in_reaction = n_distinct(word)) %>%
+ inner_join(new_sentiments) %>%
+ group_by(lexicon, words_in_reaction, words_in_lexicon) %>%
+ summarise(lex_match_words = n_distinct(word)) %>%
+ ungroup() %>%
+ mutate(total_match_words = sum(lex_match_words), 
+ match_ratio = lex_match_words / words_in_reaction) %>%
+ select(lexicon, lex_match_words, words_in_reaction, match_ratio) 
+```
+
+
+Sentiment analysis was implemented.
+```{r}
+tidy_twitter_sentiment <- tidy_twitter %>%
+ inner_join(get_sentiments("nrc"))
+```
+
+
+A new column, reaction_total, was created and sentiment analysis was implemented.
+```{r}
+tidy_sentiment_twitter <- tidy_twitter %>%
+ group_by(word) %>%
+ mutate(text_total=n()) %>%
+ ungroup() %>%
+ inner_join(get_sentiments("nrc"))
+```
+
+Negative words were examined.
+```{r}
+tidy_sentiment_twitter %>%
+ count(word, sentiment, text_total) %>%
+ mutate(percent=n/text_total) %>%
+ filter(sentiment %in% c("negative")) %>%
+ arrange(desc(percent))
+```
+
+
+Positive words were examined.
+```{r}
+tidy_sentiment_twitter %>%
+ count(word, sentiment, text_total) %>%
+ mutate(percent=n/text_total) %>%
+ filter(sentiment %in% c("positive")) %>%
+ arrange(desc(percent))
+```
+
+Words were assessed to see which ones contributed most to sentiment scores. The word expulsion contributed the most to 4 sentiments which are anger, disgust, negative, and sadness. 
+```{r}
+tidy_sentiment_twitter %>%
+ count(word,sentiment) %>%
+ group_by(sentiment) %>%
+ top_n(10,n) %>%
+ ungroup() %>%
+ mutate(word = reorder(word, n)) %>%
+ ggplot(aes(word,n, fill=sentiment)) +
+ geom_col(show.legend = FALSE) +
+ facet_wrap(~ sentiment, scales = "free") +
+ coord_flip()
+```
+
+Filter were implemented on negative words.
+```{r}
+tidy_sentiment_twitter %>%
+filter((sentiment %in% c("negative"))) %>%
+count(word, sentiment) %>%
+group_by(sentiment) %>%
+top_n(10,n) %>%
+ungroup() 
+```
+
+
+Further, the data was also analyzed using bigrams. 
+```{r}
+twitter_bigrams <- twitter %>% 
+  unnest_tokens(bigram, text, token = "ngrams", n = 2)
+```
+
+
+The most popular bigrams in the students' answers were counted.   
+```{r}
+twitter_bigrams %>% 
+  count(bigram, sort = TRUE)
+```
+
+Stop words were filtered and the most common words were counted again.
+```{r}
+bigrams_separated2 <- twitter_bigrams %>% 
+  separate(bigram, c("word1", "word2"), sep = " ") 
+
+bigrams_filtered2 <- bigrams_separated2 %>% 
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word)
+
+bigram_counts2 <- bigrams_filtered2 %>% 
+  count(word1, word2, sort = TRUE)
+
+bigram_counts2
+
+bigram_united2 <- bigrams_filtered2 %>% 
+  unite(bigram, word1, word2, sep = " ")
+```
+
+
+Tf-idf values for the tweets were calculated. 
+```{r}
+bigram_tf_idf2 <- bigram_united2 %>% 
+  count(X, bigram) %>% 
+  bind_tf_idf(bigram, X, n) %>% 
+  arrange(desc(tf_idf))
+
+bigram_tf_idf2
+```
+
+Common words that negate the subsequent words were picked and the number of times words were preceded by them were counted. 
+```{r}
+negated_words2 <- bigrams_separated2 %>% 
+  filter(word1 %in% negation_words) %>% 
+  inner_join(get_sentiments("afinn"), by = c(word2 = "word")) %>% 
+  count(word1, word2, score, sort = TRUE)
+
+negated_words2
+```
+
+Words that contributed most in the "wrong" direction were identified. 
+```{r}
+negated_words2 %>% 
+  mutate(contribution = n * score) %>% 
+  arrange(desc(abs(contribution))) %>% 
+  head(20) %>% 
+  mutate(word2 = reorder (word2, contribution)) %>% 
+  ggplot(aes(word2, n * score, fill = n * score >0)) +
+  geom_col(show.legend = FALSE) +
+  xlab("Words preceded by \"not, no, never, without\"") +
+  ylab("Sentiment score * number of occurences") +
+  coord_flip()
+```
+
+A network of common bigrams was created. 
+```{r}
+bigram_graph2 <- bigram_counts2 %>% 
+  filter(n>20) %>% 
+  graph_from_data_frame (directed = FALSE)
+
+bigram_graph2
+
+set.seed(123)
+
+ggraph(bigram_graph2, layout = "kk")+
+  geom_edge_link(aes(edge_alpha=n, edge_width=n), show.legend = FALSE,
+    end_cap = circle(.07, "inches"))+
+  geom_node_point(color = "lightblue", size = 5)+
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+  theme_void()
+```
+
+
+
+The times each pair of words occur together in the tweets was counted.
+```{r}
+word_pairs2 <- tidy_twitter %>% 
+  pairwise_count(word, X, sort=TRUE)
+
+word_pairs2
+```
+
+Correlation among words was calculated.
+```{r}
+word_cors2 <- tidy_twitter %>% 
+  group_by(word) %>% 
+  filter(n() >= 30) %>% 
+  pairwise_cor(word, X, sort = TRUE)
+
+word_cors2
+```
+
+Network of correlations among words were plotted. The group of words are due process, expelled lobbyist, school violence, and kansas city. 
+```{r}
+set.seed(123)
+
+word_cors2 %>% 
+  filter(correlation > .70) %>% 
+  graph_from_data_frame() %>% 
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha=correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+```
+
+By applying frequency techniques and analyzing tokens and correlation in the data, the researcher was able to answer the questions stated earlier in the study. The common tokens in the tweets revealed that the public feels negatively regarding the Title IX Mandate. The tweets focused on the proposed Title IX changes in Missouri that may result to over-correcting and may give more bias towards the accused in the process. Some of the tokens showed the public's trust on the Title IX mandate to protect and make people feel safe; however, some of the bigrams revealed issues such as lack of due process and false claims as some of the concerns for the mandate. In addition, analyzing the correlated words further prove that the public is concerned if the accused would get due process, other issues were also about expulsion and bills. 
+
+The researcher learned that analyzing tokens is important in knowing sentiments and common themes in a study. In this particular analysis, the researcher had some frustrations in cleaning the data as some of the tweets were not related to the topic that is being discussed. However, after dealing with the issue, vital information was discovered from the cleaned data. 
+
+
+
+##Conclusion
+The two data sets differed greatly in their results. On one hand, the survey data revealed that students feel safer and protected after learning about the Title IX Mandate. They feel that they could be more comfortable and confident in talking about their experiences now because they are aware of the resources available to them and they also feel that people care about them. On the other hand, the Twitter data revealed the opposite sentiment regarding the Title IX mandate. The twitter users were concerned about lack of due process and the possibility of expulsion. They also feel negatively about the proposed Missouri bills that may alter the Title IX mandate to make it more favorable for the accused. Yet, like the result in the survey data, some of the twitter users still feel that the mandate would be able to make people more safe. 
+
+The researcher's approach in answering the questions posted is by focusing on the frequencies of the words. The researcher analyzed tokens and computed the correlation of words so that possible vital information may be gathered from them. 
